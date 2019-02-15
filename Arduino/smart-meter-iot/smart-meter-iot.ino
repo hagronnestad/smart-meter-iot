@@ -1,5 +1,17 @@
-int analogValue = 0;
+volatile int interruptCounter;
+int totalInterruptCounter;
+ 
+hw_timer_t * timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+ 
+void IRAM_ATTR onTimer() {
+  //portENTER_CRITICAL_ISR(&timerMux);
+  //interruptCounter++;
+  //portEXIT_CRITICAL_ISR(&timerMux);
+}
 
+int analogValue = 0;
+byte packet[1024];
 
 enum ListType {
     List1 = 0x1,                // List1: Active Power (All meters)
@@ -15,10 +27,16 @@ void setup()
 
   Serial.begin(115200, SERIAL_8N1);
   Serial2.begin(2400, SERIAL_8E1);
+
+
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &onTimer, true);
+//  timerAlarmWrite(timer, 1000000, true);
+//  timerAlarmEnable(timer);
 }
 
 
-void GetPacket() {
+void GetPacket() { 
   if (Serial2.available() <= 0) return;
   
     while (true) {
@@ -27,9 +45,11 @@ void GetPacket() {
         if (Serial2.read() == 0x7E) continue;
 
         byte packetLength = (byte) Serial2.read();
-        Serial.println("Packet length: " + String(packetLength));
+        //Serial.println("Packet length: " + String(packetLength));
 
-        byte packet[packetLength + 2] = {0x7E, 0xA0, packetLength};
+        packet[0] = 0x7E;
+        packet[1] = 0xA0;
+        packet[2] = packetLength;
 
 
         int readBytes = 3;
@@ -38,20 +58,20 @@ void GetPacket() {
             readBytes++;
         }
 
-        Serial.println("Read bytes: " + String(readBytes));
+        //Serial.println("Read bytes: " + String(readBytes));
 
         ListType type = (ListType) packet[32];
 
         switch (type) {
             case List1:
                 //return DecodeList1Packet(packet);
-                Serial.println("Found List1");
+                //Serial.println("Found List1");
 
                 {
                   unsigned long power = packet[37];
-                  power = power | packet[36] << 8;
-                  power = power | packet[35] << 16;
-                  power = power | packet[34] << 24;
+                  power |= packet[36] << 8;
+                  power |= packet[35] << 16;
+                  power |= packet[34] << 24;
 
                   Serial.println("Power: " + String(power));
 
@@ -64,14 +84,14 @@ void GetPacket() {
                   byte minutes = packet[25];
                   byte seconds = packet[26];
 
-                  Serial.println("Date: " + String(year) + "/" + String(month) + "/" + String(day));
-                  Serial.println("Time: " + String(hours) + ":" + String(minutes) + ":" + String(seconds));
+                  //Serial.println("Date: " + String(year) + "/" + String(month) + "/" + String(day));
+                  //Serial.println("Time: " + String(hours) + ":" + String(minutes) + ":" + String(seconds));
                 }
                 break;
 
             case List2SinglePhase:
                 //return DecodeList2SinglePhasePacket(packet);
-                Serial.println("Found List2SinglePhase");
+                //Serial.println("Found List2SinglePhase");
 
                 {
                   unsigned long current = packet[94];
@@ -81,7 +101,7 @@ void GetPacket() {
 
                   float fCurrent = current / 1000.0f;
   
-                  Serial.println("Current: " + String(fCurrent));
+                  Serial.println("Current: " + String(fCurrent) + " A");
   
                   //CurrentL1 = BitConverter.ToInt32(data.Skip(91).Take(4).Reverse().ToArray(), 0),
                   //VoltageL1 = BitConverter.ToUInt32(data.Skip(96).Take(4).Reverse().ToArray(), 0),
@@ -90,14 +110,14 @@ void GetPacket() {
 
             case List3SinglePhase:
                 //return DecodeList3SinglePhasePacket(packet);
-                Serial.println("Found List3SinglePhase");
+                //Serial.println("Found List3SinglePhase");
                 break;
 
             default:
-                Serial.println("Found unknown list:");
-                Serial.write(packet, readBytes);
+                //Serial.println("Found unknown list:");
+                //Serial.write(packet, readBytes);
                 //OutputPacketAsHex(packet);
-                Serial.println("");
+                //Serial.println("");
                 break;
         }
 
@@ -109,6 +129,20 @@ void GetPacket() {
 
 void loop()
 {
+//  if (interruptCounter > 0) {
+ 
+//    portENTER_CRITICAL(&timerMux);
+//    interruptCounter--;
+//    portEXIT_CRITICAL(&timerMux);
+ 
+//    totalInterruptCounter++;
+ 
+//    Serial.print("An interrupt as occurred. Total number: ");
+//    Serial.println(totalInterruptCounter);
+ 
+//  }
+
+  
   // Converts the signal from the voltage divider into a TTL signal and feed it into the Serial2 RX pin
   analogValue = analogRead(A0);
   digitalWrite(13, analogValue > 1800);
@@ -119,3 +153,4 @@ void loop()
 
   GetPacket();
 }
+
